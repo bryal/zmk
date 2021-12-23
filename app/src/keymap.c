@@ -52,6 +52,7 @@ static uint8_t _zmk_keymap_layer_default = 0;
 #endif /* ZMK_KEYMAP_HAS_SENSORS */
 
 #define LAYER_LABEL(node) COND_CODE_0(DT_NODE_HAS_PROP(node, label), (NULL), (DT_LABEL(node))),
+#define LAYER_TEMPORARY(node) DT_PROP(node, temporary),
 
 // State
 
@@ -65,6 +66,9 @@ static struct zmk_behavior_binding zmk_keymap[ZMK_KEYMAP_LAYERS_LEN][ZMK_KEYMAP_
 
 static const char *zmk_keymap_layer_names[ZMK_KEYMAP_LAYERS_LEN] = {
     DT_INST_FOREACH_CHILD(0, LAYER_LABEL)};
+
+static const bool zmk_keymap_layer_temporary_flags[ZMK_KEYMAP_LAYERS_LEN] = {
+    DT_INST_FOREACH_CHILD(0, LAYER_TEMPORARY)};
 
 #if ZMK_KEYMAP_HAS_SENSORS
 
@@ -150,6 +154,14 @@ const char *zmk_keymap_layer_label(uint8_t layer) {
     }
 
     return zmk_keymap_layer_names[layer];
+}
+
+const bool zmk_keymap_layer_is_temporary(uint8_t layer) {
+    if (layer >= ZMK_KEYMAP_LAYERS_LEN) {
+        return NULL;
+    }
+
+    return zmk_keymap_layer_temporary_flags[layer];
 }
 
 int zmk_keymap_apply_position_state(int layer, uint32_t position, bool pressed, int64_t timestamp) {
