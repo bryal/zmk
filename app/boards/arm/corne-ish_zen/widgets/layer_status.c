@@ -25,6 +25,8 @@ K_MUTEX_DEFINE(layer_status_mutex);
 struct {
     uint8_t index;
     const char *label;
+    const char *last_perm_label;
+    bool is_temporary;
 } layer_status_state;
 
 void layer_status_init() {
@@ -32,6 +34,7 @@ void layer_status_init() {
         return;
     }
     style_initialized = true;
+    layer_status_state.last_perm_label = NULL;
     lv_style_init(&label_style);
     lv_style_set_text_color(&label_style, LV_STATE_DEFAULT, LV_COLOR_BLACK);
     lv_style_set_text_font(&label_style, LV_STATE_DEFAULT, &lv_font_montserrat_16);
@@ -41,6 +44,9 @@ void layer_status_init() {
 }
 
 void set_layer_symbol(lv_obj_t *label) {
+    if (layer_status_state.is_temporary) {
+        return;
+    }
 
     k_mutex_lock(&layer_status_mutex, K_FOREVER);
     const char *layer_label = layer_status_state.label;
@@ -48,7 +54,7 @@ void set_layer_symbol(lv_obj_t *label) {
     k_mutex_unlock(&layer_status_mutex);
 
     //LOG_DBG("Layer Label: %s", layer_label);
-    
+
     if (layer_label == NULL) {
         char text[6] = {};
 
@@ -60,13 +66,23 @@ void set_layer_symbol(lv_obj_t *label) {
     }
 }
 
-static void update_state() {
+static bool update_state() {
     k_mutex_lock(&layer_status_mutex, K_FOREVER);
     layer_status_state.index = zmk_keymap_highest_layer_active();
     layer_status_state.label = zmk_keymap_layer_label(layer_status_state.index);
+    layer_status_state.is_temporary = zmk_keymap_layer_is_temporary(layer_status_state.index);
+
+    const char *last_perm_label = layer_status_state.last_perm_label;
+
+    if (!layer_status_state.is_temporary) {
+        layer_status_state.last_perm_label =  layer_status_state.label;
+    }
+
     LOG_DBG("Layer changed to %i", layer_status_state.index);
 
     k_mutex_unlock(&layer_status_mutex);
+
+    return layer_status_state.label != last_perm_label;
 }
 
 int zmk_widget_layer_status_init(struct zmk_widget_layer_status *widget, lv_obj_t *parent) {
@@ -92,9 +108,9 @@ void layer_status_update_cb(struct k_work *work) {
 K_WORK_DEFINE(layer_status_update_work, layer_status_update_cb);
 
 int layer_status_listener(const zmk_event_t *eh) {
-    update_state();;
-
-    k_work_submit_to_queue(zmk_display_work_q(), &layer_status_update_work);
+    if (update_state()) {
+        k_work_submit_to_queue(zmk_display_work_q(), &layer_status_update_work);
+    }
     return 0;
 }
 
